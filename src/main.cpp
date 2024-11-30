@@ -1,4 +1,3 @@
-#include <LowPower.h> // https://github.com/rocketscream/Low-Power
 #include <FastLED.h>  // https://github.com/FastLED/FastLED
 #include <Button.h>   // https://github.com/madleech/Button
 
@@ -19,172 +18,58 @@ FASTLED_USING_NAMESPACE
 #warning "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
-#define DATA_PIN    4
+#define DATA_PIN 2 //D4
+#define PIN_BUTTON_PATTERN 5 //D1
+#define PIN_BUTTON_BRIGHTNESS 0 // GPIO0 auf NodeMCU ist D3 (PIN 0) --> Flash Button fuer BRIDHTNESS verwenden
+
+#define BAT_VOLTAGE_PIN A0
+#define VOLTAGE_FACTOR 5  //Resistors Ration Factor
+#define NUM_VOLTAGE_VALUES 10  // Anzahl der gespeicherten Spannungswerte
+#define SWITCH_OFF_VOLTAGE 0.000001 //ganz klein sonst leuchtet der Ring rot, wenn alles nur uber usb laeuft
+
 //#define CLK_PIN     2
 //#define LED_TYPE    APA102
 #define LED_TYPE    WS2812
 #define COLOR_ORDER GRB
-#define NUM_LEDS    60
+#define NUM_LEDS    160
 CRGB leds[NUM_LEDS];
 
 #define FRAMES_PER_SECOND  120
 
-const uint8_t PIN_BUTTON_PATTERN = 3;
-const uint8_t PIN_BUTTON_BRIGHTNESS = 2;
+uint8_t autoplay = 1;
+uint16_t autoplayDuration = 40; //sec
+//Effekte automatisch durchschallten (cyclePalettes) bei 1, Zeitdauer festlegen (paletteDuration)
+uint8_t cyclePalettes = 1;
+uint16_t paletteDuration = 60; //sec
+
 const uint8_t PIN_LED_STATUS = 13;
 
-uint8_t brightnesses[] = { 255, 128, 64, 0, };
+uint8_t brightnesses[] = { 255, 128, 64, 1 };
 uint8_t currentBrightnessIndex = 0;
 
 uint8_t currentPatternIndex = 0; // Index number of which pattern is current
 uint8_t hue = 0; // rotating "base color" used by many of the patterns
 uint8_t hueFast = 0; // faster rotating "base color" used by many of the patterns
 
-uint8_t autoplay = 0;
-uint8_t autoplayDuration = 10;
 unsigned long autoPlayTimeout = 0;
-
-uint8_t cyclePalettes = 1;
-uint8_t paletteDuration = 5;
 uint8_t currentPaletteIndex = 0;
 unsigned long paletteTimeout = 0;
 
 bool ledStatus = false;
 
-Button buttonBrightness(2);
-Button buttonPattern(3);
+float voltageBuffer[NUM_VOLTAGE_VALUES] = {0};  // Array für die letzten 10 Spannungswerte
+int voltageBufferIndex = 0;                    // Aktueller Index im Array
+float voltageSum = 0;                          // Laufende Summe der Spannungswerte
+
+Button buttonBrightness(PIN_BUTTON_BRIGHTNESS);
+Button buttonPattern(PIN_BUTTON_PATTERN);
+
+#define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
 void wakeUp()
 {
   Serial.println("Waking up...");
 }
-
-void setup() {
-  Serial.begin(115200);
-  Serial.println("setup");
-  
-  // delay(3000); // 3 second delay for recovery
-
-  FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
-
-  // tell FastLED about the LED strip configuration
-  FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-  //  FastLED.addLeds<LED_TYPE,DATA_PIN,CLK_PIN,COLOR_ORDER,DATA_RATE_MHZ(12)>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-
-  // set master brightness control
-  FastLED.setBrightness(brightnesses[currentBrightnessIndex]);
-
-  FastLED.show(CRGB::Black);
-
-  buttonBrightness.begin();
-  buttonPattern.begin();
-
-  pinMode(PIN_LED_STATUS, OUTPUT);
-  digitalWrite(PIN_LED_STATUS, LOW);
-}
-
-// List of patterns to cycle through.  Each is defined as a separate function below.
-typedef void (*SimplePatternList[])();
-SimplePatternList patterns = {
-  pride,
-  colorWaves,
-  chaseRainbow,
-  chaseRainbow2,
-  chaseRainbow3,
-  chasePalette,
-  chasePalette2,
-  chasePalette3,
-  solidPalette,
-  solidRainbow,
-  rainbow,
-  rainbowWithGlitter,
-  confetti,
-  sinelon,
-  juggle,
-  bpm
-};
-
-void loop()
-{
-  // Call the current pattern function once, updating the 'leds' array
-  patterns[currentPatternIndex]();
-
-  // send the 'leds' array out to the actual LED strip
-  FastLED.show();
-  // insert a delay to keep the framerate modest
-  FastLED.delay(1000 / FRAMES_PER_SECOND);
-
-  // do some periodic updates
-  EVERY_N_MILLISECONDS( 40 ) {
-    hue++;  // slowly cycle the "base color" through the rainbow
-
-    // slowly blend the current palette to the next
-    nblendPaletteTowardPalette(currentPalette, targetPalette, 8);
-  }
-
-  EVERY_N_MILLISECONDS( 4 ) {
-    hueFast++;  // slowly cycle the "base color" through the rainbow
-  }
-
-  if (autoplay == 1 && (millis() > autoPlayTimeout)) {
-    nextPattern();
-    autoPlayTimeout = millis() + (autoplayDuration * 1000);
-  }
-
-  if (cyclePalettes == 1 && (millis() > paletteTimeout)) {
-    nextPalette();
-    paletteTimeout = millis() + (paletteDuration * 1000);
-  }
-
-  handleInput();
-
-  if (brightnesses[currentBrightnessIndex] == 0) {  
-    Serial.println("Going down...");
-    Serial.flush();
-  
-    fill_solid(leds, NUM_LEDS, CRGB::Black);
-    FastLED.show();
-    
-    // Allow wake up pin to trigger interrupt on low.
-    attachInterrupt(0, wakeUp, LOW);
-    attachInterrupt(1, wakeUp, LOW);
-    
-    // Enter power down state with ADC and BOD module disabled.
-    // Wake up when wake up pin is low.
-    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF); 
-    
-    // Disable external pin interrupt on wake up pin.
-    detachInterrupt(0);
-    detachInterrupt(1);
-  
-    Serial.println("I have awoken!");
-    
-    nextBrightness();
-  }
-}
-
-void handleInput() {
-  if (buttonPattern.pressed()) {
-    digitalWrite(PIN_LED_STATUS, HIGH);
-  }
-  else if (buttonPattern.released())
-  {
-    ledStatus = !ledStatus;
-    digitalWrite(PIN_LED_STATUS, LOW);
-    nextPattern();
-  }
-
-  if (buttonBrightness.pressed()) {
-    digitalWrite(PIN_LED_STATUS, HIGH);
-  }
-  else if (buttonBrightness.released()) {
-    ledStatus = !ledStatus;
-    digitalWrite(PIN_LED_STATUS, LOW);
-    nextBrightness();
-  }
-}
-
-#define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
 // returns an 8-bit value that
 // rises and falls in a sawtooth wave, 'BPM' times per minute,
@@ -206,35 +91,17 @@ uint8_t beatsaw8( accum88 beats_per_minute, uint8_t lowest = 0, uint8_t highest 
   return result;
 }
 
-void nextBrightness()
-{
-  // add one to the current brightness number, and wrap around at the end
-  currentBrightnessIndex = (currentBrightnessIndex + 1) % ARRAY_SIZE(brightnesses);
-  FastLED.setBrightness(brightnesses[currentBrightnessIndex]);
-  Serial.print("brightness: ");
-  Serial.println(brightnesses[currentBrightnessIndex]);
-}
-
-void nextPattern()
-{
-  // add one to the current pattern number, and wrap around at the end
-  currentPatternIndex = (currentPatternIndex + 1) % ARRAY_SIZE(patterns);
-  Serial.print("pattern: ");
-  Serial.println(currentPatternIndex);
-}
-
-void nextPalette()
-{
-  // add one to the current palette number, and wrap around at the end
-  currentPaletteIndex = (currentPaletteIndex + 1) % paletteCount;
-  Serial.print("palette: ");
-  Serial.println(currentPaletteIndex);
-}
-
 void rainbow()
 {
   // FastLED's built-in rainbow generator
   fill_rainbow( leds, NUM_LEDS, hue, 7);
+}
+
+void addGlitter( fract8 chanceOfGlitter)
+{
+  if ( random8() < chanceOfGlitter) {
+    leds[ random16(NUM_LEDS) ] += CRGB::White;
+  }
 }
 
 void rainbowWithGlitter()
@@ -244,12 +111,6 @@ void rainbowWithGlitter()
   addGlitter(80);
 }
 
-void addGlitter( fract8 chanceOfGlitter)
-{
-  if ( random8() < chanceOfGlitter) {
-    leds[ random16(NUM_LEDS) ] += CRGB::White;
-  }
-}
 
 void confetti()
 {
@@ -426,11 +287,6 @@ void pride()
   }
 }
 
-void colorWaves()
-{
-  colorwaves(leds, NUM_LEDS, currentPalette);
-}
-
 // ColorWavesWithPalettes by Mark Kriegsman: https://gist.github.com/kriegsman/8281905786e8b2632aeb
 // This function draws color waves with an ever-changing,
 // widely-varying set of parameters, using a color palette.
@@ -484,3 +340,207 @@ void colorwaves( CRGB* ledarray, uint16_t numleds, CRGBPalette16& palette)
     nblend( ledarray[pixelnumber], newcolor, 128);
   }
 }
+
+void colorWaves()
+{
+  colorwaves(leds, NUM_LEDS, currentPalette);
+}
+// List of patterns to cycle through.  Each is defined as a separate function below.
+typedef void (*SimplePatternList[])();
+SimplePatternList patterns = {
+  pride,
+  colorWaves,
+  chaseRainbow,
+  chaseRainbow2,
+  //chaseRainbow3,
+  chasePalette,
+  chasePalette2,
+  //chasePalette3,
+  solidPalette,
+  solidRainbow,
+  rainbow,
+  rainbowWithGlitter,
+  confetti,
+  sinelon,
+  juggle,
+  bpm
+};
+
+// Array mit den Namen der Muster (manuell zugeordnet)
+const char* patternNames[] = {
+  "Pride",
+  "Color Waves",
+  "Chase Rainbow",
+  "Chase Rainbow 2",
+  //"Chase Rainbow 3",
+  "Chase Palette",
+  "Chase Palette 2",
+  //"Chase Palette 3",
+  "Solid Palette",
+  "Solid Rainbow",
+  "Rainbow",
+  "Rainbow with Glitter",
+  "Confetti",
+  "Sinelon",
+  "Juggle",
+  "BPM"
+};
+
+
+void nextBrightness()
+{
+  // add one to the current brightness number, and wrap around at the end
+  currentBrightnessIndex = (currentBrightnessIndex + 1) % ARRAY_SIZE(brightnesses);
+  FastLED.setBrightness(brightnesses[currentBrightnessIndex]);
+  Serial.print("brightness: ");
+  Serial.println(brightnesses[currentBrightnessIndex]);
+}
+
+void nextPattern()
+{
+  // add one to the current pattern number, and wrap around at the end
+  currentPatternIndex = (currentPatternIndex + 1) % ARRAY_SIZE(patterns);
+  Serial.print("pattern: ");
+  //Serial.println(currentPatternIndex);
+  Serial.println(patternNames[currentPatternIndex]);
+}
+
+void nextPalette()
+{
+  // add one to the current palette number, and wrap around at the end
+  currentPaletteIndex = (currentPaletteIndex + 1) % paletteCount;
+  Serial.print("palette: ");
+  Serial.println(currentPaletteIndex);
+}
+
+float getBatteryVoltage() {
+    // Neuen Spannungswert lesen
+    float newVoltageValue = analogRead(BAT_VOLTAGE_PIN);  // Analogen Spannungswert lesen
+    // Ältesten Spannungswert von der Summe abziehen
+    voltageSum -= voltageBuffer[voltageBufferIndex];
+    // Neuen Spannungswert in das Array speichern
+    voltageBuffer[voltageBufferIndex] = newVoltageValue;
+    // Neuen Spannungswert zur Summe hinzufügen
+    voltageSum += newVoltageValue;
+    // Index auf den nächsten Platz verschieben (Ringpuffer)
+    voltageBufferIndex = (voltageBufferIndex + 1) % NUM_VOLTAGE_VALUES;
+    // Durchschnitt berechnen
+    float averageVoltage = voltageSum / NUM_VOLTAGE_VALUES;
+    // Spannung umrechnen
+    float convertedVoltage = (averageVoltage / 1024.0) * 5.0;  // In 5V-Skala umrechnen
+    float batteryVoltage = convertedVoltage * VOLTAGE_FACTOR; // Tatsächliche Batteriespannung
+    // Debug-Ausgabe (optional)
+    //Serial.print("batteryVoltage: ");
+    //Serial.println(batteryVoltage);
+    return batteryVoltage;
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("setup");
+  
+  // delay(3000); // 3 second delay for recovery
+
+  FastLED.setMaxPowerInVoltsAndMilliamps(5, 500);
+
+  // tell FastLED about the LED strip configuration
+  FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+  //  FastLED.addLeds<LED_TYPE,DATA_PIN,CLK_PIN,COLOR_ORDER,DATA_RATE_MHZ(12)>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
+
+  // set master brightness control
+  FastLED.setBrightness(brightnesses[currentBrightnessIndex]);
+
+  FastLED.show(CRGB::Black);
+
+  buttonBrightness.begin();
+  buttonPattern.begin();
+
+  pinMode(PIN_LED_STATUS, OUTPUT);
+  digitalWrite(PIN_LED_STATUS, LOW);
+}
+
+void handleInput() {
+  if (buttonPattern.pressed()) {
+    digitalWrite(PIN_LED_STATUS, HIGH);
+  }
+  else if (buttonPattern.released())
+  {
+    ledStatus = !ledStatus;
+    digitalWrite(PIN_LED_STATUS, LOW);
+    nextPattern();
+  }
+
+  if (buttonBrightness.pressed()) {
+    digitalWrite(PIN_LED_STATUS, HIGH);
+  }
+  else if (buttonBrightness.released()) {
+    ledStatus = !ledStatus;
+    digitalWrite(PIN_LED_STATUS, LOW);
+    nextBrightness();
+  }
+}
+
+void loop()
+{
+   if(getBatteryVoltage() <= SWITCH_OFF_VOLTAGE){
+    Serial.flush();
+    fill_solid(leds, NUM_LEDS, CRGB::Red);
+    FastLED.show();
+  }else{
+    // Call the current pattern function once, updating the 'leds' array
+    patterns[currentPatternIndex]();
+
+    // send the 'leds' array out to the actual LED strip
+    FastLED.show();
+    // insert a delay to keep the framerate modest
+    FastLED.delay(1000 / FRAMES_PER_SECOND);
+
+    // do some periodic updates
+    EVERY_N_MILLISECONDS( 40 ) {
+      hue++;  // slowly cycle the "base color" through the rainbow
+
+      // slowly blend the current palette to the next
+      nblendPaletteTowardPalette(currentPalette, targetPalette, 8);
+    }
+
+    EVERY_N_MILLISECONDS( 4 ) {
+      hueFast++;  // slowly cycle the "base color" through the rainbow
+    }
+
+    if (autoplay == 1 && (millis() > autoPlayTimeout)) {
+      nextPattern();
+      autoPlayTimeout = millis() + (autoplayDuration * 1000);
+    }
+
+    if (cyclePalettes == 1 && (millis() > paletteTimeout)) {
+      nextPalette();
+      paletteTimeout = millis() + (paletteDuration * 1000);
+    }
+
+    handleInput();
+  }
+ 
+
+  if (brightnesses[currentBrightnessIndex] == 0) {  
+    Serial.println("Going down...");
+    Serial.flush();
+  
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.show();
+    
+    // Allow wake up pin to trigger interrupt on low.
+    attachInterrupt(0, wakeUp, LOW);
+    attachInterrupt(1, wakeUp, LOW);
+
+    // Disable external pin interrupt on wake up pin.
+    detachInterrupt(0);
+    detachInterrupt(1);
+  
+    Serial.println("I have awoken!");
+    
+    nextBrightness();
+  }
+}
+
+
+

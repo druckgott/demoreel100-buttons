@@ -1,20 +1,10 @@
-// From ColorWavesWithPalettes by Mark Kriegsman: https://gist.github.com/kriegsman/8281905786e8b2632aeb
+#include <FastLED.h>
 
-// Gradient Color Palette definitions for 33 different cpt-city color palettes.
-//    956 bytes of PROGMEM for all of the palettes together,
-//   +618 bytes of PROGMEM for gradient palette code (AVR).
-//  1,494 bytes total for all 34 color palettes and associated code.
-
-// Gradient palette "ib_jul01_gp", originally from
-// http://soliton.vm.bytemark.co.uk/pub/cpt-city/ing/xmas/tn/ib_jul01.png.index.html
-// converted for FastLED with gammas (2.6, 2.2, 2.5)
-// Size: 16 bytes of program space.
-
-DEFINE_GRADIENT_PALETTE( ib_jul01_gp ) {
+DEFINE_GRADIENT_PALETTE(ib_jul01_gp) {
   0, 194,  1,  1,
   94,   1, 29, 18,
   132,  57, 131, 28,
-  255, 113,  1,  1
+  255, 113,  1,  1,
 };
 
 // Gradient palette "es_vintage_57_gp", originally from
@@ -508,16 +498,7 @@ DEFINE_GRADIENT_PALETTE( Blue_Cyan_Yellow_gp ) {
 //
 // This list of color palettes acts as a "playlist"; you can
 // add or delete, or re-arrange as you wish.
-const TProgmemRGBGradientPalettePtr palettes[] = {
-  *RainbowColors_p,
-  *RainbowStripeColors_p,
-  *CloudColors_p,
-  *LavaColors_p,
-  *OceanColors_p,
-  *ForestColors_p,
-  *PartyColors_p,
-  *HeatColors_p,
-
+const TProgmemRGBGradientPaletteRef palettes[] = {
   Sunset_Real_gp,
   es_rivendell_15_gp,
   es_ocean_breeze_036_gp,
@@ -553,9 +534,11 @@ const TProgmemRGBGradientPalettePtr palettes[] = {
   Blue_Cyan_Yellow_gp
 };
 
-
 // Count of how many palettes are defined:
-const uint8_t paletteCount = sizeof(palettes) / sizeof( TProgmemRGBGradientPalettePtr );
+//const uint8_t paletteCount = sizeof(palettes) / sizeof(TProgmemRGBGradientPaletteRef);
+uint8_t paletteCount = sizeof(palettes) / sizeof(TProgmemRGBGradientPaletteRef);
 
 CRGBPalette16 currentPalette( palettes[0] );
 CRGBPalette16 targetPalette( palettes[0] );
+
+//int paletteCount2 = 32; // Globale Variable definieren
