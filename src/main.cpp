@@ -37,7 +37,7 @@ CRGB leds[NUM_LEDS];
 #define FRAMES_PER_SECOND  120
 
 uint8_t autoplay = 1;
-uint16_t autoplayDuration = 40; //sec
+uint16_t autoplayDuration = 10; //sec
 //Effekte automatisch durchschallten (cyclePalettes) bei 1, Zeitdauer festlegen (paletteDuration)
 uint8_t cyclePalettes = 1;
 uint16_t paletteDuration = 60; //sec
@@ -345,6 +345,112 @@ void colorWaves()
 {
   colorwaves(leds, NUM_LEDS, currentPalette);
 }
+
+// Zeitsteuerung
+unsigned long lastUpdate = 0;
+unsigned long updateInterval = 30; // Interval für alle Effekte
+
+// Sine-Wave Berechnung
+uint8_t sineWave(uint8_t x) {
+  return (sin((x * 3.14159) / 128) + 1) * 127.5;  // Mapping der Sine-Welle auf 0-255
+}
+
+uint8_t runningLightsCounter = 0;  // Schrittzähler für Running Lights
+
+// Running Lights-Effekt
+void runningLights() {
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    uint8_t size = 10;  // Adjust for smoothness
+    uint8_t sineIncr = (255 / NUM_LEDS) * size;
+    sineIncr = sineIncr > 1 ? sineIncr : 1;
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+      uint8_t lum = sineWave((i + runningLightsCounter) * sineIncr);
+      CRGB color = ColorFromPalette(RainbowColors_p, lum);
+      leds[i] = color;
+    }
+
+    runningLightsCounter++;
+    if (runningLightsCounter == 255) runningLightsCounter = 0;
+
+    FastLED.show();
+  }
+}
+
+// Hyper Sparkle-Effekt
+void hyperSparkle() {
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    fill_solid(leds, NUM_LEDS, CRGB::Red);
+
+    uint8_t size = 1;
+
+    for (int i = 0; i < 8; i++) {
+      int pos = random(NUM_LEDS - size);
+      fill_solid(leds + pos, size, CRGB::White);
+    }
+
+    FastLED.show();
+  }
+}
+
+
+uint8_t cometPosition = 0;  // Position des Kometen
+uint8_t cometSpeed = 5;     // Geschwindigkeit des Kometen
+// Comet-Effekt
+void cometEffect() {
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    fadeToBlackBy(leds, NUM_LEDS, 20);  // Fade with a value of 20 (can be adjusted)
+    leds[cometPosition] = CRGB::White;
+
+    cometPosition = (cometPosition + cometSpeed) % NUM_LEDS;
+
+    FastLED.show();
+  }
+}
+
+// Funktion, um Feuerwerks-Explosionen zu simulieren
+void fireworks(CRGB color) {
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    // Fade des gesamten LED-Strips
+    fadeToBlackBy(leds, NUM_LEDS, 10);  // Fade mit einem Wert von 10 (kann angepasst werden)
+
+    // Bestimme eine zufällige Anzahl an Funken
+    uint8_t numSparks = random(10, 30);  // Anzahl der Funken
+
+    // Erstelle Funken an zufälligen Positionen
+    for (int i = 0; i < numSparks; i++) {
+      int pos = random(NUM_LEDS);  // Zufällige Position für den Funken
+      leds[pos] = color;           // Setze die Farbe an der Position
+    }
+
+    FastLED.show();  // LEDs anzeigen
+  }
+}
+
+// Firework-Effekt, der aus zufällig ausgewählten Farben besteht
+void fireworkEffect() {
+  if (millis() - lastUpdate >= updateInterval) {
+    lastUpdate = millis();
+
+    // Zufällige Auswahl einer Farbe aus einer Palette (keine schwarze Farbe)
+    CRGB color = CRGB::Black;
+    do {
+      color = CRGB(random8(), random8(), random8());  // Zufällige Farbe
+    } while (color == CRGB::Black);
+
+    // Funken-Effekt mit der ausgewählten Farbe ausführen
+    fireworks(color);
+  }
+}
+
 // List of patterns to cycle through.  Each is defined as a separate function below.
 typedef void (*SimplePatternList[])();
 SimplePatternList patterns = {
@@ -363,7 +469,11 @@ SimplePatternList patterns = {
   confetti,
   sinelon,
   juggle,
-  bpm
+  bpm,
+  runningLights,
+  hyperSparkle,
+  cometEffect,
+  fireworkEffect
 };
 
 // Array mit den Namen der Muster (manuell zugeordnet)
@@ -383,7 +493,11 @@ const char* patternNames[] = {
   "Confetti",
   "Sinelon",
   "Juggle",
-  "BPM"
+  "BPM",
+  "RunningLights",
+  "HyperSparkle",
+  "CometEffect",
+  "FireworkEffect"
 };
 
 
