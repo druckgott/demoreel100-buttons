@@ -19,8 +19,8 @@ FASTLED_USING_NAMESPACE
 #endif
 
 #define DATA_PIN 2 //D4
-#define PIN_BUTTON_PATTERN 5 //D1
-#define PIN_BUTTON_BRIGHTNESS 0 // GPIO0 auf NodeMCU ist D3 (PIN 0) --> Flash Button fuer BRIDHTNESS verwenden
+#define PIN_BUTTON_PATTERN 0 // GPIO0 auf NodeMCU ist D3 (PIN 0) --> Flash Button fuer BRIDHTNESS verwenden
+#define PIN_BUTTON_BRIGHTNESS 5 //D1
 
 #define BAT_VOLTAGE_PIN A0
 #define VOLTAGE_FACTOR 5  //Resistors Ration Factor
@@ -37,7 +37,7 @@ CRGB leds[NUM_LEDS];
 #define FRAMES_PER_SECOND  120
 
 uint8_t autoplay = 1;
-uint16_t autoplayDuration = 10; //sec
+uint16_t autoplayDuration = 40; //sec
 //Effekte automatisch durchschallten (cyclePalettes) bei 1, Zeitdauer festlegen (paletteDuration)
 uint8_t cyclePalettes = 1;
 uint16_t paletteDuration = 60; //sec
@@ -111,7 +111,6 @@ void rainbowWithGlitter()
   addGlitter(80);
 }
 
-
 void confetti()
 {
   // random colored speckles that blink in and fade smoothly
@@ -129,7 +128,8 @@ void sinelon()
   // fading trails
   fadeToBlackBy( leds, NUM_LEDS, 20);
   CHSV color = CHSV(hue, 220, 255);
-  int pos = beatsin16(120, 0, NUM_LEDS - 1);
+  //int pos = beatsin16(120, 0, NUM_LEDS - 1);
+  int pos = beatsin16(80, 0, NUM_LEDS - 1);
   static int prevpos = 0;
   if ( pos < prevpos ) {
     fill_solid(leds + pos, (prevpos - pos) + 1, color);
@@ -137,17 +137,6 @@ void sinelon()
     fill_solid(leds + prevpos, (pos - prevpos) + 1, color);
   }
   prevpos = pos;
-}
-
-void bpm()
-{
-  // colored stripes pulsing at a defined Beats-Per-Minute (BPM)
-  uint8_t BeatsPerMinute = 62;
-  CRGBPalette16 palette = RainbowColors_p;
-  uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
-  for ( int i = 0; i < NUM_LEDS; i++) { //9948
-    leds[i] = ColorFromPalette(palette, hue + (i * 2), beat - hue + (i * 10));
-  }
 }
 
 void juggle() {
@@ -168,6 +157,17 @@ void juggle() {
     }
     leds[beatsin16(i + 15, 0, NUM_LEDS)] += color;
     dothue += step;
+  }
+}
+
+void bpm()
+{
+  // colored stripes pulsing at a defined Beats-Per-Minute (BPM)
+  uint8_t BeatsPerMinute = 62;
+  CRGBPalette16 palette = RainbowColors_p;
+  uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
+  for ( int i = 0; i < NUM_LEDS; i++) { //9948
+    leds[i] = ColorFromPalette(palette, hue + (i * 2), beat - hue + (i * 10));
   }
 }
 
@@ -198,21 +198,6 @@ void chaseRainbow2() {
   }
 }
 
-void chaseRainbow3()
-{
-  fadeToBlackBy(leds, NUM_LEDS, 20);
-  CHSV color = CHSV(hue, 220, 255);
-  int pos = beatsaw8(120, 0, NUM_LEDS - 1);
-  static int prevpos = 0;
-  if ( pos < prevpos ) {
-    fill_solid(leds + prevpos, NUM_LEDS - prevpos, color);
-    fill_solid(0, pos + 1, color);
-  } else {
-    fill_solid(leds + prevpos, (pos - prevpos) + 1, color);
-  }
-  prevpos = pos;
-}
-
 void chasePalette() {
   for (uint16_t i = NUM_LEDS - 1; i > 0; i--) {
     leds[i] = leds[i - 1];
@@ -226,21 +211,6 @@ void chasePalette2() {
   for ( int i = 0; i < NUM_LEDS; i++) {
     leds[i] = ColorFromPalette(currentPalette, hueFast + i * step);
   }
-}
-
-void chasePalette3()
-{
-  fadeToBlackBy(leds, NUM_LEDS, 20);
-  CRGB color = ColorFromPalette(currentPalette, hue);
-  int pos = beatsaw8(120, 0, NUM_LEDS - 1);
-  static int prevpos = 0;
-  if ( pos < prevpos ) {
-    fill_solid(leds + prevpos, NUM_LEDS - prevpos, color);
-    fill_solid(0, pos + 1, color);
-  } else {
-    fill_solid(leds + prevpos, (pos - prevpos) + 1, color);
-  }
-  prevpos = pos;
 }
 
 // Pride2015 by Mark Kriegsman: https://gist.github.com/kriegsman/964de772d64c502760e5
@@ -359,9 +329,6 @@ uint8_t runningLightsCounter = 0;  // Schrittzähler für Running Lights
 
 // Running Lights-Effekt
 void runningLights() {
-  if (millis() - lastUpdate >= updateInterval) {
-    lastUpdate = millis();
-
     uint8_t size = 10;  // Adjust for smoothness
     uint8_t sineIncr = (255 / NUM_LEDS) * size;
     sineIncr = sineIncr > 1 ? sineIncr : 1;
@@ -376,80 +343,48 @@ void runningLights() {
     if (runningLightsCounter == 255) runningLightsCounter = 0;
 
     FastLED.show();
-  }
 }
 
 // Hyper Sparkle-Effekt
 void hyperSparkle() {
-  if (millis() - lastUpdate >= updateInterval) {
-    lastUpdate = millis();
-
-    fill_solid(leds, NUM_LEDS, CRGB::Red);
-
+  CRGB color = ColorFromPalette(currentPalette, hue);
+    fill_solid(leds, NUM_LEDS, color);
     uint8_t size = 1;
-
     for (int i = 0; i < 8; i++) {
       int pos = random(NUM_LEDS - size);
       fill_solid(leds + pos, size, CRGB::White);
     }
-
     FastLED.show();
-  }
 }
 
-
 uint8_t cometPosition = 0;  // Position des Kometen
-uint8_t cometSpeed = 5;     // Geschwindigkeit des Kometen
 // Comet-Effekt
 void cometEffect() {
-  if (millis() - lastUpdate >= updateInterval) {
+    uint8_t cometSpeed = 6;     // Geschwindigkeit des Kometen
+    CRGB color = ColorFromPalette(currentPalette, hue);
     lastUpdate = millis();
-
-    fadeToBlackBy(leds, NUM_LEDS, 20);  // Fade with a value of 20 (can be adjusted)
-    leds[cometPosition] = CRGB::White;
-
+    fadeToBlackBy(leds, NUM_LEDS, 2);  // Fade with a value of 20 (can be adjusted)
+    leds[cometPosition] = color;
     cometPosition = (cometPosition + cometSpeed) % NUM_LEDS;
-
     FastLED.show();
-  }
 }
 
 // Funktion, um Feuerwerks-Explosionen zu simulieren
-void fireworks(CRGB color) {
-  if (millis() - lastUpdate >= updateInterval) {
+void fireworkEffect() {
+    CRGB color = ColorFromPalette(currentPalette, hue);
     lastUpdate = millis();
-
     // Fade des gesamten LED-Strips
-    fadeToBlackBy(leds, NUM_LEDS, 10);  // Fade mit einem Wert von 10 (kann angepasst werden)
-
+    fadeToBlackBy(leds, NUM_LEDS, 20);  // Fade mit einem Wert von 10 (kann angepasst werden)
     // Bestimme eine zufällige Anzahl an Funken
     uint8_t numSparks = random(10, 30);  // Anzahl der Funken
-
     // Erstelle Funken an zufälligen Positionen
     for (int i = 0; i < numSparks; i++) {
       int pos = random(NUM_LEDS);  // Zufällige Position für den Funken
       leds[pos] = color;           // Setze die Farbe an der Position
     }
-
     FastLED.show();  // LEDs anzeigen
-  }
 }
 
-// Firework-Effekt, der aus zufällig ausgewählten Farben besteht
-void fireworkEffect() {
-  if (millis() - lastUpdate >= updateInterval) {
-    lastUpdate = millis();
-
-    // Zufällige Auswahl einer Farbe aus einer Palette (keine schwarze Farbe)
-    CRGB color = CRGB::Black;
-    do {
-      color = CRGB(random8(), random8(), random8());  // Zufällige Farbe
-    } while (color == CRGB::Black);
-
-    // Funken-Effekt mit der ausgewählten Farbe ausführen
-    fireworks(color);
-  }
-}
 
 // List of patterns to cycle through.  Each is defined as a separate function below.
 typedef void (*SimplePatternList[])();
@@ -458,10 +393,8 @@ SimplePatternList patterns = {
   colorWaves,
   chaseRainbow,
   chaseRainbow2,
-  //chaseRainbow3,
   chasePalette,
   chasePalette2,
-  //chasePalette3,
   solidPalette,
   solidRainbow,
   rainbow,
@@ -482,10 +415,8 @@ const char* patternNames[] = {
   "Color Waves",
   "Chase Rainbow",
   "Chase Rainbow 2",
-  //"Chase Rainbow 3",
   "Chase Palette",
   "Chase Palette 2",
-  //"Chase Palette 3",
   "Solid Palette",
   "Solid Rainbow",
   "Rainbow",
@@ -579,6 +510,7 @@ void handleInput() {
   }
   else if (buttonPattern.released())
   {
+    autoplay = 0;
     ledStatus = !ledStatus;
     digitalWrite(PIN_LED_STATUS, LOW);
     nextPattern();
